@@ -13,7 +13,7 @@ from fsdetection import load_fs_dataset
 from fvcore.nn.precise_bn import get_bn_modules
 
 from detectron2.utils import comm
-from detectron2.engine import launch, HookBase
+from detectron2.engine import launch, HookBase, hooks
 from detectron2.data import MetadataCatalog, DatasetCatalog
 from detectron2.data import detection_utils as utils
 from detectron2.data import transforms as T
@@ -24,7 +24,7 @@ from defrcn.config import get_cfg, set_global_cfg
 from defrcn.dataloader import build_detection_train_loader, build_detection_test_loader, DatasetMapper
 from defrcn.evaluation import DatasetEvaluators, verify_results, DatasetEvaluator, inference_on_dataset, \
     print_csv_format
-from defrcn.engine import DefaultTrainer, default_argument_parser, default_setup, hooks, EvalHookDeFRCN
+from defrcn.engine import DefaultTrainer, default_argument_parser, default_setup, EvalHookDeFRCN
 
 
 class WandbHook(HookBase):
