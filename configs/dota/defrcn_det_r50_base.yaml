@@ -1,0 +1,26 @@
+_BASE_: "../Base-RCNN.yaml"
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  RPN:
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.0
+  ROI_HEADS:
+    NUM_CLASSES: 16
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.75
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 512
+DATASETS:
+  TRAIN: ('dota_train',)
+  VAL: ('dota_val',)
+  TEST: ('dota_test',)
+SOLVER:
+  IMS_PER_BATCH: 16
+  STEPS: (39000, 45000)
+  MAX_ITER: 50000
+  CHECKPOINT_PERIOD: 200000
+OUTPUT_DIR: "checkpoints/dota/dercn/dercn_R_50_FPN_base"

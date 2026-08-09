@@ -1,0 +1,26 @@
+_BASE_: "../Base-RCNN.yaml"
+MODEL:
+  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  MASK_ON: False
+  RESNETS:
+    DEPTH: 50
+  RPN:
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.0
+  ROI_HEADS:
+    NUM_CLASSES: 16
+    ENABLE_DECOUPLE: True
+    BACKWARD_SCALE: 0.75
+INPUT:
+  MIN_SIZE_TRAIN: (480, 512, 544, 576, 608, 640, 672, 704, 736, 768, 800)
+  MIN_SIZE_TEST: 800
+DATASETS:
+  TRAIN: ('dior_train',)
+  VAL: ('dior_val',)
+  TEST: ('dior_test',)
+SOLVER:
+  IMS_PER_BATCH: 16
+  STEPS: (10000, 13300)
+  MAX_ITER: 15000
+  CHECKPOINT_PERIOD: 200000
+OUTPUT_DIR: "checkpoints/dior/dercn/dercn_R_50_FPN_base"
