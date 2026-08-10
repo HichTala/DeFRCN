@@ -80,54 +80,64 @@ class DatasetMapperHuggingFace(DatasetMapper):
 
         utils.check_image_size(dataset_dict, image)
 
-        if "annotations" not in dataset_dict:
-            image, transforms = T.apply_transform_gens(
-                ([self.crop_gen] if self.crop_gen else []) + self.tfm_gens, image
-            )
+        if "sem_seg_file_name" in dataset_dict:
+            sem_seg_gt = utils.read_image(dataset_dict.pop("sem_seg_file_name"), "L").squeeze(2)
         else:
-            # Crop around an instance if there are instances in the image.
-            # USER: Remove if you don't use cropping
-            if self.crop_gen:
-                crop_tfm = utils.gen_crop_transform_with_instance(
-                    self.crop_gen.get_crop_size(image.shape[:2]),
-                    image.shape[:2],
-                    np.random.choice(dataset_dict["annotations"]),
-                )
-                image = crop_tfm.apply_image(image)
-            image, transforms = T.apply_transform_gens(self.tfm_gens, image)
-            if self.crop_gen:
-                transforms = crop_tfm + transforms
+            sem_seg_gt = None
+
+        aug_input = T.AugInput(image, sem_seg=sem_seg_gt)
+        transforms = self.augmentations(aug_input)
+        image, sem_seg_gt = aug_input.image, aug_input.sem_seg
 
         image_shape = image.shape[:2]  # h, w
-
         # Pytorch's dataloader is efficient on torch.Tensor due to shared-memory,
         # but not efficient on large generic data structures due to the use of pickle & mp.Queue.
         # Therefore it's important to use torch.Tensor.
-        dataset_dict["image"] = torch.as_tensor(image.transpose(2, 0, 1).astype("float32"))
-        # Can use uint8 if it turns out to be slow some day
+        dataset_dict["image"] = torch.as_tensor(np.ascontiguousarray(image.transpose(2, 0, 1)))
+        if sem_seg_gt is not None:
+            dataset_dict["sem_seg"] = torch.as_tensor(sem_seg_gt.astype("long"))
 
-        if not self.is_train:
-            dataset_dict.pop("annotations", None)
-            dataset_dict.pop("sem_seg_file_name", None)
-            return dataset_dict
+        # USER: Remove if you don't use pre-computed proposals.
+        # Most users would not need this feature.
+        if self.proposal_topk is not None:
+            utils.transform_proposals(
+                dataset_dict, image_shape, transforms, proposal_topk=self.proposal_topk
+            )
+
+        # if not self.is_train:
+        # USER: Modify this if you want to keep them for some reason.
+        # dataset_dict.pop("annotations", None)
+        dataset_dict.pop("sem_seg_file_name", None)
+        # return dataset_dict
 
         if "annotations" in dataset_dict:
             # USER: Modify this if you want to keep them for some reason.
             for anno in dataset_dict["annotations"]:
-                anno.pop("segmentation", None)
-                anno.pop("keypoints", None)
+                if not self.use_instance_mask:
+                    anno.pop("segmentation", None)
+                if not self.use_keypoint:
+                    anno.pop("keypoints", None)
 
             # USER: Implement additional transformations if you have other types of data
             annos = [
                 utils.transform_instance_annotations(
-                    obj, transforms, image_shape
+                    obj, transforms, image_shape, keypoint_hflip_indices=self.keypoint_hflip_indices
                 )
                 for obj in dataset_dict.pop("annotations")
                 if obj.get("iscrowd", 0) == 0
             ]
-            instances = utils.annotations_to_instances(annos, image_shape)
-            dataset_dict["instances"] = utils.filter_empty_instances(instances)
+            instances = utils.annotations_to_instances(
+                annos, image_shape, mask_format=self.instance_mask_format
+            )
 
+            # After transforms such as cropping are applied, the bounding box may no longer
+            # tightly bound the object. As an example, imagine a triangle object
+            # [(0,0), (2,0), (0,2)] cropped by a box [(1,0),(2,2)] (XYXY format). The tight
+            # bounding box of the cropped triangle should be [(1,0),(2,1)], which is not equal to
+            # the intersection of original bounding box and the cropping box.
+            if self.recompute_boxes:
+                instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
+            dataset_dict["instances"] = utils.filter_empty_instances(instances)
         return dataset_dict
 
 def hf_to_detectron2(dataset, split="train"):
