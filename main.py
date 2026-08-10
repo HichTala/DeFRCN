@@ -71,8 +71,8 @@ class DatasetMapperHuggingFace(DatasetMapper):
         else:
             image = self.image_dict[dataset_dict["image_id"]]
 
-        conversion_format = self.img_format
-        if self.img_format == "BGR":
+        conversion_format = self.image_format
+        if self.image_format == "BGR":
             conversion_format = "RGB"
 
         image = image.convert(conversion_format)
