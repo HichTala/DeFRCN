@@ -1,6 +1,6 @@
 _BASE_: "../Base-RCNN.yaml"
 MODEL:
-  WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
+  WEIGHTS: "/linkhome/rech/genxcj01/ubc18yy/.torch/iopath_cache/detectron2/ImageNetPretrained/MSRA"
   MASK_ON: False
   RESNETS:
     DEPTH: 50
