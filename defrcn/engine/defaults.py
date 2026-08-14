@@ -253,7 +253,6 @@ class DefaultTrainer(SimpleTrainer):
                 model,
                 device_ids=[comm.get_local_rank()],
                 broadcast_buffers=False,
-                find_unused_parameters=True,
             )
         super().__init__(model, data_loader, optimizer)
 
