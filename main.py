@@ -57,19 +57,12 @@ class DatasetMapperHuggingFace(DatasetMapper):
         self.is_validation = is_validation
 
         self.hf_dataset = hf_dataset
-        if is_validation:
-            self.image_dict = DatasetCatalog.get(cfg.DATASETS.VAL[0] + "_images")
-        else:
-            self.image_dict = DatasetCatalog.get(cfg.DATASETS.TEST[0] + "_images")
 
     def __call__(self, dataset_dict):
         dataset_dict = copy.deepcopy(dataset_dict)  # it will be modified by code below
         # USER: Write your own image loading if it's not from a file
-        if self.is_train:
-            sample = self.hf_dataset[dataset_dict["image_id"]]
-            image = sample["image"]
-        else:
-            image = self.image_dict[dataset_dict["image_id"]]
+        sample = self.hf_dataset[dataset_dict["image_id"]]
+        image = sample["image"]
 
         conversion_format = self.image_format
         if self.image_format == "BGR":
@@ -214,61 +207,51 @@ def write_temp_coco(coco_dict):
     tmp.close()
     return tmp.name
 
-def register_hf_data():
+def register_hf_data(split="train"):
     seed = os.getenv("REPEAT_ID", 2026)
     dataset_name = os.getenv("DATASET")
 
-    dataset = load_fs_dataset(f"/lustre/fsn1/projects/rech/mvq/ubc18yy/datasets/{dataset_name}")
-    og_dataset = copy.deepcopy(dataset["train"])
-    classes = dataset["train"].features["objects"]["category"].feature.names
+    dataset = load_fs_dataset(f"/lustre/fsn1/projects/rech/mvq/ubc18yy/datasets/{dataset_name}", split=split)
+    og_dataset = copy.deepcopy(dataset)
+    classes = dataset.features["objects"]["category"].feature.names
 
-    id2label = dict(enumerate(classes))
-    categories = [{"id": i, "name": name} for i, name in id2label.items()]
+    if split != "train":
+        name = f"{dataset_name}_{split}"
+        records = hf_to_detectron2(dataset)
+        DatasetCatalog.register(name, lambda: records)
+        MetadataCatalog.get(name).set(thing_classes=classes, evaluator_type="coco")
 
-    coco_dict, images_dict_test = hf_to_coco_dict(dataset["test"], categories=categories)
-    coco_path = write_temp_coco(coco_dict)
+        return og_dataset
 
-    register_coco_instances(f"{dataset_name}_test", {}, coco_path, image_root=".")
-    DatasetCatalog.register(f"{dataset_name}_test_images", lambda: images_dict_test)
-    MetadataCatalog.get(f"{dataset_name}_test").set(thing_classes=classes, evaluator_type="coco")
-    del coco_dict
+    else:
+        name = f"{dataset_name}_train"
+        records = hf_to_detectron2(dataset)
+        DatasetCatalog.register(name, lambda: records)
+        MetadataCatalog.get(name).set(thing_classes=classes)
+        dataset = copy.deepcopy(og_dataset)
 
-    coco_dict, images_dict_val = hf_to_coco_dict(dataset["validation"], categories=categories)
-    coco_path = write_temp_coco(coco_dict)
+        name = f"{dataset_name}_1shot"
+        dataset.sampling(shots=1, seed=int(seed))
+        records_1shot = hf_to_detectron2(dataset)
+        DatasetCatalog.register(name, lambda: records_1shot)
+        MetadataCatalog.get(name).set(thing_classes=classes)
+        dataset = copy.deepcopy(og_dataset)
 
-    register_coco_instances(f"{dataset_name}_val", {}, coco_path, image_root=".")
-    DatasetCatalog.register(f"{dataset_name}_val_images", lambda: images_dict_val)
-    MetadataCatalog.get(f"{dataset_name}_val").set(thing_classes=classes, evaluator_type="coco")
-    del coco_dict
+        name = f"{dataset_name}_5shot"
+        dataset.sampling(shots=5, seed=int(seed))
+        records_5shot = hf_to_detectron2(dataset)
+        DatasetCatalog.register(name, lambda: records_5shot)
+        MetadataCatalog.get(name).set(thing_classes=classes)
+        dataset = copy.deepcopy(og_dataset)
 
-    name = f"{dataset_name}_train"
-    records = hf_to_detectron2(dataset["train"])
-    DatasetCatalog.register(name, lambda: records)
-    MetadataCatalog.get(name).set(thing_classes=classes)
-    dataset["train"] = copy.deepcopy(og_dataset)
+        name = f"{dataset_name}_10shot"
+        dataset.sampling(shots=10, seed=int(seed))
+        records_10shot = hf_to_detectron2(dataset)
+        DatasetCatalog.register(name, lambda: records_10shot)
+        MetadataCatalog.get(name).set(thing_classes=classes)
+        dataset = copy.deepcopy(og_dataset)
 
-    name = f"{dataset_name}_1shot"
-    dataset["train"].sampling(shots=1, seed=int(seed))
-    records_1shot = hf_to_detectron2(dataset["train"])
-    DatasetCatalog.register(name, lambda: records_1shot)
-    MetadataCatalog.get(name).set(thing_classes=classes)
-    dataset["train"] = copy.deepcopy(og_dataset)
-
-    name = f"{dataset_name}_5shot"
-    dataset["train"].sampling(shots=5, seed=int(seed))
-    records_5shot = hf_to_detectron2(dataset["train"])
-    DatasetCatalog.register(name, lambda: records_5shot)
-    MetadataCatalog.get(name).set(thing_classes=classes)
-    dataset["train"] = copy.deepcopy(og_dataset)
-
-    name = f"{dataset_name}_10shot"
-    dataset["train"].sampling(shots=10, seed=int(seed))
-    records_10shot = hf_to_detectron2(dataset["train"])
-    DatasetCatalog.register(name, lambda: records_10shot)
-    MetadataCatalog.get(name).set(thing_classes=classes)
-    dataset["train"] = copy.deepcopy(og_dataset)
-
-    del dataset
+        del dataset
     return og_dataset
 
 class Trainer(DefaultTrainer):
@@ -380,7 +363,8 @@ class Trainer(DefaultTrainer):
         It now calls :func:`fsdet.data.build_detection_test_loader`.
         Overwrite it if you'd like a different data loader.
         """
-        mapper = DatasetMapperHuggingFace(cfg, is_train=False, is_validation=is_validation)
+        dataset = register_hf_data(split='validation' if is_validation else 'test')
+        mapper = DatasetMapperHuggingFace(cfg, is_train=False, is_validation=is_validation, hf_dataset=dataset)
         return build_detection_test_loader(cfg, dataset_name, mapper)
 
     @classmethod

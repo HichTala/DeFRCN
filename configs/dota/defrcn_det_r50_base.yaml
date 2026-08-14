@@ -16,11 +16,15 @@ INPUT:
   MIN_SIZE_TEST: 512
 DATASETS:
   TRAIN: ('dota_train',)
-  VAL: ('dota_val',)
+  VAL: ('dota_validation',)
   TEST: ('dota_test',)
+DATALOADER:
+  NUM_WORKERS: 3
 SOLVER:
   IMS_PER_BATCH: 16
   STEPS: (39000, 45000)
   MAX_ITER: 50000
   CHECKPOINT_PERIOD: 200000
 OUTPUT_DIR: "checkpoints/dota/dercn/dercn_R_50_FPN_base"
+TEST:
+  EVAL_PERIOD: 2000

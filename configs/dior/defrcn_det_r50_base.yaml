@@ -16,11 +16,15 @@ INPUT:
   MIN_SIZE_TEST: 800
 DATASETS:
   TRAIN: ('dior_train',)
-  VAL: ('dior_val',)
+  VAL: ('dior_validation',)
   TEST: ('dior_test',)
+DATALOADER:
+  NUM_WORKERS: 3
 SOLVER:
   IMS_PER_BATCH: 16
   STEPS: (10000, 13300)
   MAX_ITER: 15000
   CHECKPOINT_PERIOD: 200000
 OUTPUT_DIR: "checkpoints/dior/dercn/dercn_R_50_FPN_base"
+TEST:
+  EVAL_PERIOD: 2000
