@@ -11,6 +11,7 @@ import wandb
 from fsdetection import load_fs_dataset
 
 from fvcore.nn.precise_bn import get_bn_modules
+from fvcore.common.file_io import PathManager
 
 from detectron2.utils import comm
 from detectron2.engine import launch, HookBase, hooks
@@ -25,6 +26,7 @@ from defrcn.dataloader import build_detection_train_loader, build_detection_test
 from defrcn.evaluation import DatasetEvaluators, verify_results, DatasetEvaluator, inference_on_dataset, \
     print_csv_format
 from defrcn.engine import DefaultTrainer, default_argument_parser, default_setup, EvalHookDeFRCN
+from defrcn.evaluation.testing import flatten_results_dict
 
 
 class WandbHook(HookBase):
@@ -52,8 +54,7 @@ class WandbHook(HookBase):
 
 class DatasetMapperHuggingFace(DatasetMapper):
     def __init__(self, cfg, is_train=True, is_validation=False, hf_dataset=None):
-        super().__init__(cfg, is_train)
-        self.is_train = is_train
+        super().__init__(cfg, is_train=is_train)
         self.is_validation = is_validation
 
         self.hf_dataset = hf_dataset
@@ -132,6 +133,69 @@ class DatasetMapperHuggingFace(DatasetMapper):
                 instances.gt_boxes = instances.gt_masks.get_bounding_boxes()
             dataset_dict["instances"] = utils.filter_empty_instances(instances)
         return dataset_dict
+
+class CustomEvalHookDeFRCN(EvalHookDeFRCN):
+    """
+    Run an evaluation function periodically, and at the end of training.
+    It is executed every ``eval_period`` iterations and after the last iteration.
+    """
+
+    def __init__(self, eval_period, eval_function, cfg):
+        """
+        Args:
+            eval_period (int): the period to run `eval_function`. Set to 0 to
+                not evaluate periodically (but still after the last iteration).
+            eval_function (callable): a function which takes no arguments, and
+                returns a nested dict of evaluation metrics.
+            cfg: config
+        Note:
+            This hook must be enabled in all or none workers.
+            If you would like only certain workers to perform evaluation,
+            give other workers a no-op function (`eval_function=lambda: None`).
+        """
+        super().__init__(eval_period, eval_function, cfg)
+
+    def _do_eval(self, validation=True):
+        results = self._func(validation=validation)
+
+        if results:
+            assert isinstance(
+                results, dict
+            ), "Eval function must return a dict. Got {} instead.".format(results)
+
+            flattened_results = flatten_results_dict(results)
+            for k, v in flattened_results.items():
+                try:
+                    v = float(v)
+                except Exception as e:
+                    raise ValueError(
+                        "[EvalHook] eval_function should return a nested dict of float. "
+                        "Got '{}: {}' instead.".format(k, v)
+                    ) from e
+            self.trainer.storage.put_scalars(**flattened_results, smoothing_hint=False)
+
+        if comm.is_main_process() and results:
+            # save evaluation results in json
+            is_final = self.trainer.iter + 1 >= self.trainer.max_iter
+            os.makedirs(
+                os.path.join(self.cfg.OUTPUT_DIR, 'inference'), exist_ok=True)
+            output_file = 'res_final.json' if is_final else \
+                'iter_{:07d}.json'.format(self.trainer.iter)
+            with PathManager.open(os.path.join(self.cfg.OUTPUT_DIR, 'inference',
+                                               output_file), 'w') as fp:
+                json.dump(results, fp)
+
+        # Evaluation may take different time among workers.
+        # A barrier make them start the next iteration together.
+        comm.synchronize()
+
+    def after_train(self):
+        # This condition is to prevent the eval from running after a failed training
+        if self.trainer.iter + 1 >= self.trainer.max_iter:
+            self._do_eval(validation=False)
+        # func is likely a closure that holds reference to the trainer
+        # therefore we clean it to avoid circular reference in the end
+        del self._func
 
 def hf_to_detectron2(dataset, split="train"):
     records = []
@@ -305,13 +369,13 @@ class Trainer(DefaultTrainer):
             )
             ret.append(WandbHook(log_period=20))
 
-        def test_and_save_results():
-            self._last_eval_results = self.test(self.cfg, self.model)
+        def test_and_save_results(validation=True):
+            self._last_eval_results = self.test(self.cfg, self.model, validation)
             return self._last_eval_results
 
         # Do evaluation after checkpointer, because then if it fails,
         # we can use the saved checkpoint to debug.
-        ret.append(EvalHookDeFRCN(
+        ret.append(CustomEvalHookDeFRCN(
             cfg.TEST.EVAL_PERIOD, test_and_save_results, self.cfg))
 
         if comm.is_main_process():
@@ -368,7 +432,7 @@ class Trainer(DefaultTrainer):
         return build_detection_test_loader(cfg, dataset_name, mapper)
 
     @classmethod
-    def test(cls, cfg, model, evaluators=None):
+    def test(cls, cfg, model, evaluators=None, is_validation=True):
         """
         Args:
             cfg (CfgNode):
