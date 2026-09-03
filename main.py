@@ -370,7 +370,7 @@ class Trainer(DefaultTrainer):
             ret.append(WandbHook(log_period=20))
 
         def test_and_save_results(validation=True):
-            self._last_eval_results = self.test(self.cfg, self.model, validation)
+            self._last_eval_results = self.test(self.cfg, self.model, is_validation=validation)
             return self._last_eval_results
 
         # Do evaluation after checkpointer, because then if it fails,
