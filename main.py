@@ -275,8 +275,7 @@ def register_hf_data(split="train"):
     seed = os.getenv("REPEAT_ID", 2026)
     dataset_name = os.getenv("DATASET")
 
-    # dataset = load_fs_dataset(f"/lustre/fsn1/projects/rech/mvq/ubc18yy/datasets/{dataset_name}", split=split)
-    dataset = load_fs_dataset(f"HichTala/{dataset_name}", split=split)
+    dataset = load_fs_dataset(f"/lustre/fsn1/projects/rech/mvq/ubc18yy/datasets/{dataset_name}", split=split)
     og_dataset = copy.deepcopy(dataset)
     classes = dataset.features["objects"]["category"].feature.names
 
@@ -387,7 +386,7 @@ class Trainer(DefaultTrainer):
     @classmethod
     def build_evaluator(cls, cfg, dataset_name, output_folder=None):
         if output_folder is None:
-            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference.json")
+            output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
         evaluator_list = []
         evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
         if evaluator_type == "coco":
