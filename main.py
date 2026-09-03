@@ -276,6 +276,9 @@ def register_hf_data(split="train"):
     dataset_name = os.getenv("DATASET")
 
     dataset = load_fs_dataset(f"/lustre/fsn1/projects/rech/mvq/ubc18yy/datasets/{dataset_name}", split=split)
+    if dataset_name in DatasetCatalog:
+        return dataset
+
     og_dataset = copy.deepcopy(dataset)
     classes = dataset.features["objects"]["category"].feature.names
 
