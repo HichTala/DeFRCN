@@ -25,6 +25,6 @@ SOLVER:
   STEPS: (39000, 45000)
   MAX_ITER: 50000
   CHECKPOINT_PERIOD: 200000
-OUTPUT_DIR: "checkpoints/dota/dercn/dercn_R_50_FPN_base"
+OUTPUT_DIR: "runs/dota/dercn/dercn_R_50_FPN_base"
 TEST:
   EVAL_PERIOD: 2000
