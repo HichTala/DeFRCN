@@ -41,4 +41,4 @@ cp -r $SCRATCH/datasets/${dataset} $JOBSCRATCH/${dataset}/
 echo "Copy finished!"
 
 DATASET=${dataset} \
-srun python -u main.py --num-gpus 8 --config-file configs/${dataset}/defrcn_det_r50_base.yml
+srun python -u main.py --num-gpus 8 --config-file configs/${dataset}/defrcn_det_r50_base.yaml
