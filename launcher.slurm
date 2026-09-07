@@ -27,7 +27,7 @@
 #SBATCH --qos=qos_gpu-t4
 
 module purge # purge modules inherited by default
-module load pytorch-gpu/py3/2.0.0 # load modules
+module load pytorch-gpu/py3/2.8.0 # load modules
 
 export PYTHONUSERBASE=$WORK/.local
 export WANDB_MODE=offline
@@ -41,4 +41,4 @@ cp -r $SCRATCH/datasets/${dataset} $JOBSCRATCH/${dataset}/
 echo "Copy finished!"
 
 DATASET=${dataset} \
-srun python -u tools/main.py --num-gpus 8 --config-file configs/${dataset}/defrcn_det_r50_base.yml
+srun python -u main.py --num-gpus 8 --config-file configs/${dataset}/defrcn_det_r50_base.yml
