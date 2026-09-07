@@ -24,38 +24,35 @@ from defrcn.evaluation.evaluator import DatasetEvaluator
 
 logger = logging.getLogger(__name__)
 
-def convert_to_coco_json(dataset_name, output_file, allow_cached=True):
+def convert_to_coco_json(dataset_name, output_folder="", allow_cached=True):
     """
     Converts dataset into COCO format and saves it to a json file.
-    dataset_name must be registered in DatasetCatalog and in detectron2's standard format.
+    dataset_name must be registered in DatastCatalog and in detectron2's standard format.
 
     Args:
         dataset_name:
             reference from the config file to the catalogs
-            must be registered in DatasetCatalog and in detectron2's standard format
-        output_file: path of json file that will be saved to
+            must be registered in DatastCatalog and in detectron2's standard format
+        output_folder: where json file will be saved and loaded from
         allow_cached: if json file is already present then skip conversion
+    Returns:
+        cache_path: path to the COCO-format json file
     """
 
     # TODO: The dataset or the conversion script *may* change,
     # a checksum would be useful for validating the cached data
-    cache_path = os.path.join(output_file, f"{dataset_name}_coco_format.json")
-    PathManager.mkdirs(os.path.dirname(output_file))
-    with file_lock(output_file):
-        if PathManager.exists(output_file) and allow_cached:
-            logger.warning(
-                f"Using previously cached COCO format annotations at '{output_file}'. "
-                "You need to clear the cache file if your dataset has been modified."
-            )
-        else:
-            logger.info(f"Converting annotations of dataset '{dataset_name}' to COCO format ...)")
-            coco_dict = convert_to_coco_dict(dataset_name)
+    cache_path = os.path.join(output_folder, f"{dataset_name}_coco_format.json")
+    PathManager.mkdirs(output_folder)
+    if os.path.exists(cache_path) and allow_cached:
+        logger.info(f"Reading cached annotations in COCO format from:{cache_path} ...")
+    else:
+        logger.info(f"Converting dataset annotations in '{dataset_name}' to COCO format ...)")
+        coco_dict = convert_to_coco_dict(dataset_name)
 
-            logger.info(f"Caching COCO format annotations at '{output_file}' ...")
-            tmp_file = output_file + ".tmp"
-            with PathManager.open(tmp_file, "w") as f:
-                json.dump(coco_dict, f)
-            shutil.move(tmp_file, output_file)
+        with PathManager.open(cache_path, "w") as json_file:
+            logger.info(f"Caching annotations in COCO format: {cache_path}")
+            json.dump(coco_dict, json_file)
+
     return cache_path
 
 
