@@ -49,7 +49,7 @@ def convert_to_coco_json(dataset_name, output_folder="", allow_cached=True):
         logger.info(f"Converting dataset annotations in '{dataset_name}' to COCO format ...)")
         coco_dict = convert_to_coco_dict(dataset_name)
 
-        with PathManager.open(cache_path, "w") as json_file:
+        with PathManager.open(cache_path, "w+") as json_file:
             logger.info(f"Caching annotations in COCO format: {cache_path}")
             json.dump(coco_dict, json_file)
 
